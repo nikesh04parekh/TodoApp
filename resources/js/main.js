@@ -1,3 +1,5 @@
+//localStorage.removeItem('todoList');
+
 let todo = (function () {
     let data = (localStorage.getItem('todoList')) ? JSON.parse(localStorage.getItem('todoList')) : {
         todo: [],
@@ -8,61 +10,65 @@ let todo = (function () {
 
     function addItem1() {
         const value = document.getElementById('item').value;
-        if (value) {
-            addItem(value);
-        }
-        else{
-            alert(`Enter a valid to do`);
-        }
+        value ? addItem(value) : alert(`Enter a valid to do`);
     }
 
     function addItem2(e) {
         let value = this.value;
         if ((e.code === 'Enter' || e.code === 'NumpadEnter')) {
-            if (value) {
-                addItem(value);
-            }
-            else {
-                alert(`Enter a valid to do`);
-            }
+            value ? addItem(value) : alert(`Enter a valid to do`);
         }
     }
 
-    // User clicked on the add button
-    // If there is any text inside the item field, add that text to the todo list
     document.getElementById('add').addEventListener('click', addItem1);
-
     document.getElementById('item').addEventListener('keydown', addItem2);
-
     document.getElementById('deleteAll').addEventListener('click' , deleteAll);
 
-    function addItem(value) {
-        addItemToDOM(value);
-        document.getElementById('item').value = '';
+    function checkIfPresent(value){
+        return (data.todo.filter((item) => item.value === value)).length;
+    }
 
-        data.todo.push(value);
+    function addItem(value) {
+        if (checkIfPresent(value))
+        {
+            alert(`To do with value = ${value} already present`);
+            return;
+        }
+        let id = addItemToDOM(value);
+        document.getElementById('item').value = '';
+        let temp = {
+            value,
+            id
+        }
+        data.todo.push(temp);
         dataObjectUpdated();
     }
 
     function renderTodoList() {
         if (!data.todo.length) return;
-
-        for (let i = 0; i < data.todo.length; i++) {
-            let value = data.todo[i];
-            addItemToDOM(value);
-        }
+        data.todo.forEach((item) => addItemToDOM(item.value));
     }
 
     function dataObjectUpdated() {
         localStorage.setItem('todoList', JSON.stringify(data));
     }
 
+    function findIndex(id){
+        let index = -1 , i = 0;
+
+        data.todo.forEach((item) => {
+            if (item.id == id)
+                index = i;
+            i += 1;
+        });
+        return index;
+    }
     function removeItem() {
-        //console.log(this);
         let item = this.parentNode.parentNode;
         let parent = item.parentNode;
         let value = item.children[0].value;
-        data.todo.splice(data.todo.indexOf(value), 1);
+        let index = findIndex(item.id);
+        data.todo.splice(index , 1);
         dataObjectUpdated();
         parent.removeChild(item);
     }
@@ -78,29 +84,30 @@ let todo = (function () {
 
     function editItem() {
         let item = this.parentNode.parentNode;
+        let listItems = item.parentNode.children;
+        //console.log(item , listItems);
+        for (let i = 0 ; i < listItems.length ; i++){
+            item1 = listItems[i];
+            if (item.id != item1.id && getFirstMatchingTagOfCurrentDiv(item1.children[1] , 'edit').style.display === 'none')
+                cancelChange(item1.children[1]);
+        }
         cancelChange(this.parentNode);
         item.children[0].readOnly = false;
         item.children[0].focus();
-        //parent.removeChild(item);
     }
 
     function setDisplayFunctionality(element) {
-        if (element.style.display === "block")
-            element.style.display = "none";
-        else {
-            element.style.display = "block";
-        }
-
+        element.style.display = (element.style.display === 'block') ? 'none' : 'block';
     }
 
     function updateItem() {
         let item = this.parentNode.parentNode;
-        //console.log(item);
         if (!item.children[0].value) {
             alert('Enter a valid Update to-do');
             return;
         }
-        data.todo[Number(item.id) - 1] = item.children[0].value;
+        let index = findIndex(item.id);
+        data.todo[index].value = item.children[0].value;
         cancelChange(this.parentNode);
         item.children[0].readOnly = true;
         dataObjectUpdated();
@@ -114,35 +121,44 @@ let todo = (function () {
     }
 
     function cancelListener() {
+        let item = this.parentNode.parentNode;
+        let id = item.id;
+        let index = findIndex(id);
+        item.children[0].value = data.todo[index].value;
+        item.children[0].readOnly = true;
         cancelChange(this.parentNode);
     }
 
     function getMaxId(element) {
         let arr = element.children;
         let j = 0;
-        for (let i = 0; i < arr.length; i++) {
-            //console.log(Number(arr[i].id));
-            if (Number(arr[i].id) > j)
-                j = Number(arr[i].id);
-        }
+        for (let i = 0; i < arr.length; i++)
+            j = Math.max(j , Number(arr[i].id));
         return j + 1;
     }
 
     function updateItem1(e) {
-        //console.log(this);
         if (e.key === 'Enter' || e.key === 'NumpadEnter'){
             getFirstMatchingTagOfCurrentDiv(this.parentNode.children[1] , 'update').click();
         }
     }
 
-    // Adds a new item to the todo list
+    function createButton(buttonName , flag){
+        let button = document.createElement('button');
+        button.classList.add(buttonName);
+        if (flag)
+            button.style.display = 'block';
+        else
+            button.style.display = 'none';
+        button.innerText = buttonName;
+        return button;
+    }
+
     function addItemToDOM(text) {
         let list = document.getElementById('todo');
-
         let item = document.createElement('li');
-        item.id = "" + getMaxId(list);
-
-
+        let id = getMaxId(list)
+        item.id = "" + id;
         let input = document.createElement('input');
         input.value = text;
         input.readOnly = true;
@@ -152,48 +168,26 @@ let todo = (function () {
         input.style.outline = 'none';
         input.addEventListener("keydown", updateItem1);
 
-
         let buttons = document.createElement('div');
         buttons.classList.add('buttons');
 
         //Remove Button functionality
-        let remove = document.createElement('button');
-        remove.classList.add('remove');
-        remove.innerText = 'Remove';
-        remove.style.display = 'block';
-        remove.classList.add('button1');
-
-        // Add click event for removing the item
+        let remove = createButton('remove' , true);
         remove.addEventListener('click', removeItem);
 
-
         //Update Button functionality
-        let update = document.createElement('button');
-        update.classList.add('update');
-        update.innerText = 'Update';
-
+        let update = createButton('update' , false);
         update.addEventListener('click', updateItem);
-        update.style.display = 'none';
-
 
         //Cancel Button functionality
-        let cancel = document.createElement('button');
-        cancel.classList.add('cancel');
-        cancel.innerText = 'Cancel';
-
+        let cancel = createButton('cancel' , false);
         cancel.addEventListener('click', cancelListener);
-        cancel.style.display = 'none';
 
         //Edit Button Functionality
-        let edit = document.createElement('button');
-        edit.classList.add('edit');
-        edit.innerText = 'Edit';
-        edit.style.display = 'block';
-
-        // Add click event for completing the item
+        let edit = createButton('edit' , true);
         edit.addEventListener('click', editItem);
 
-
+        //Appending buttons to li of ul
         buttons.appendChild(edit);
         buttons.appendChild(update);
         buttons.appendChild(remove);
@@ -202,12 +196,12 @@ let todo = (function () {
         item.appendChild(buttons);
 
         list.insertBefore(item, list.childNodes[0]);
+        return id;
     }
 
     function deleteAll() {
         let list = document.getElementById('todo');
         let arr = list.children;
-        //console.log(arr[0].children[1]);
         if (arr.length === 0){
             alert(`No to do's found`);
             return;
