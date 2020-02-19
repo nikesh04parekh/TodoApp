@@ -192,3 +192,11 @@ ul.todo#todo:after {
     color: black;
     border-radius:10px;
 }
+
+li.input{
+    readOnly = true;
+    width = '70%';
+    padding = '3px';
+    borderWidth = '0px';
+    outline = 'none';
+}
