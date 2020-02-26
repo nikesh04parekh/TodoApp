@@ -10,28 +10,25 @@ const model = (function(){
     }
 
     function addTodoItem(todoValue){
-            const todo = {
-                id : data.todo.length > 0 ? data.todo[data.todo.length - 1].id + 1 : 1,
-                value : todoValue
-            }
-            data.todo.push(todo);
-            _commit();
-            return todo.item;
+        if (checkIfPresent(todoValue))
+            return -1;
+        const todo = {
+            id : data.todo.length > 0 ? data.todo[data.todo.length - 1].id + 1 : 1,
+            value : todoValue,
+            completed : false
+        }
+        data.todo.push(todo);
+        _commit();
+        return todo.id;
     }
 
     function deleteTodoItem(id){
-        let i = 0 , index = -1;
-        data.todo.forEach((todo) => {
-            if (todo.id == id)
-                index = i;
-            i += 1;
-        })
-        data.todo.splice(index , 1);
+        data.todo = data.todo.filter((todo) => todo.id != id);
         _commit();
     }
 
     function updateTodoItem(id , todoValue){
-        data.todo = data.todo.map((todo) => (todo.id == id ? {id : todo.id , value : todoValue} : todo));
+        data.todo = data.todo.map((todo) => (todo.id == id ? {id : todo.id , value : todoValue , completed : todo.completed} : todo));
         _commit();
     }
 
@@ -43,146 +40,149 @@ const model = (function(){
         return data.todo;
     }
 
-    function getMaxId(){
-        return data.todo.length > 0 ? data.todo[data.todo.length - 1] : 0;
-    }
-
     function checkIfPresent(todoValue){
         const arr = (data.todo.filter((todo) => todo.value === todoValue));
         return (arr.length !== 0);
     }
+
+    function toggleCompleted(id){
+        data.todo = data.todo.map((todo) => todo.id == id ? {id : todo.id , value : todo.value , completed : !todo.completed} : todo);
+        _commit();
+    }
+
     return{
         addTodoItem,
         deleteTodoItem,
         updateTodoItem,
         getTodoList,
-        getMaxId,
         checkIfPresent,
         getValueOfCurrentTodo,
+        toggleCompleted,
+        markAll,
+        unmarkAll
     }
-}());
-
-const controller = (function(){
-
-    function removeItem(){
-        let li = view.findClosestParent(this , 'li');
-        let index = view.getId(li);
-        model.deleteTodoItem(index);
-        li.parentNode.removeChild(li);
-    }
-
-    function editItem(){
-        view.setToDefaultView();
-        view.cancelChange(this);
-        view.updateInputProperty(this);
-    }
-
-    function cancelListener(){
-        let li = view.findClosestParent(this , 'li');
-        let input = view.findFirstChild(li , 'input');
-        view.setValue(input , model.getValueOfCurrentTodo(view.getId(li)));
-        view.cancelChange(this);
-        view.updateInputProperty(this);
-    }
-
-    function deleteAll(){
-        let arr = view.getTodoUlList().children;
-        while(arr.length){
-            view.findFirstChild(arr[0] , 'remove').click();
-        }
-    }
-
-    function updateItem(){
-        let li = view.findClosestParent(this , 'li');
-        let input = view.findFirstChild(li , 'input');
-        let id = view.getId(view.findClosestParent(this , 'li'));
-        if (view.getValue(li) === ''){
-            alert(`Enter a valid to do`);
-            return;
-        }
-        if (model.checkIfPresent(view.getValue(li)))
-        {
-            alert(`To do with value = ${view.getValue(li)} already exists.`);
-            return;
-        }
-        model.updateTodoItem(id , view.getValue(li));
-        view.setValue(view.findClosestParent(this , 'li'));
-        view.cancelChange(this);
-        view.updateInputProperty(this);
-    }
-
-    function normalAdd(){
-        const todoValue = view.getTodoText();
-        if (todoValue === ''){
-            alert('Enter a valid to do');
-            return;
-        }
-        else if (model.checkIfPresent(todoValue)){
-            alert(`To do with value = ${todoValue} already present`);
-        }
-        else{
-            const id = model.getMaxId() + 1;
-            const todo = {
-                id,
-                value : todoValue
-            };
-            model.addTodoItem(todoValue);
-            view.addItemToDom(todo);
-        }
-        view.resetTodoText();
-        view.focusInputTag();
-    }
-
-    function addViaEnterKey(e){
-        if (e.key === 'Enter' || e.key === 'NumpadEnter')
-            normalAdd();
-    }
-
-    function updateViaEnter(e){
-        if (e.key === 'Enter' || e.key === 'NumpadEnter')
-           view.findFirstChild(e.target.parentNode , 'update').click();
-    }
-
-    return{
-        editItem,
-        removeItem,
-        updateItem,
-        cancelListener,
-        getTodoList : model.getTodoList,
-        normalAdd,
-        addViaEnterKey,
-        deleteAll,
-        updateViaEnter
-    }
-
 }());
 
 const view = (function(){
     const input = getElement('#item');
     const todoListUl = getElement('#todo');
-    document.getElementById('add').addEventListener('click' , controller.normalAdd);
-    document.getElementById('deleteAll').addEventListener('click' , controller.deleteAll);
-    input.addEventListener('keydown' , controller.addViaEnterKey);
     function getElement(selector){
         return document.querySelector(selector);
-    }
-
-    function getTodoText(){
-        return input.value;
     }
 
     function resetTodoText(){
         input.value = '';
     }
 
-    function getTodoUlList(){
-        return todoListUl;
-    }
-
     function createElement(tag , classList){
         const element = document.createElement(tag);
         element.classList.add(...classList);
         return element;
+    }
+
+    function bindDeleteTodo(handler){
+        todoListUl.addEventListener('click' , function(event){
+            if (event.target.classList.contains('remove')){
+                let li = findClosestParent(event.target , 'li');
+                //console.log(Array.of(...todoListUl.children).indexOf(li) , Array.prototype.indexOf.apply(todoListUl.childNodes , [li]));
+                todoListUl.removeChild(li);
+                handler(li.id);
+            }
+        });
+    }
+
+    function bindEditTodo(){
+        todoListUl.addEventListener('click' , function(event){
+            if (event.target.classList.contains('edit')){
+                const li = findClosestParent(event.target , 'li');
+                const input = findFirstChild(li , 'input');
+                if (input.style.textDecoration === 'line-through'){
+                    alert('Cannot edit to do');
+                    return;
+                }
+                setToDefaultView();
+                cancelChange(event.target);
+                updateInputProperty(event.target);
+            }
+        });
+    }
+
+    function bindCancel(handler){
+        todoListUl.addEventListener('click' , function(event){
+            if (event.target.classList.contains('cancel')){
+                let li = findClosestParent(event.target , 'li');
+                let input = findFirstChild(li , 'input');
+                input.value = handler(li.id);
+                cancelChange(event.target);
+                updateInputProperty(event.target);
+            }
+        });
+    }
+
+    function bindUpdateTodo(handler){
+        todoListUl.addEventListener('click' , function(event){
+            if (event.target.classList.contains('update')){
+                let li = findClosestParent(event.target , 'li');
+                let input = findFirstChild(li , 'input');
+                if (input.value === ''){
+                    alert('Enter a valid to do');
+                    return;
+                }
+                updateInputProperty(event.target);
+                const status = handler(li.id , input.value);
+                if (status == -1)
+                    return;
+                cancelChange(event.target);
+            }
+        });
+    }
+
+    function bindAddTodo(handler){
+        document.getElementById('add').addEventListener('click' , function(){
+            if (input.value === ''){
+                alert('Enter a valid to do');
+                return;
+            }
+            const todoValue = input.value;
+            const status = handler(todoValue);
+            input.value = '';
+            if (status == -1){
+                alert(`Todo with value = ${todoValue} already exists.`);
+                return;
+            }
+            const todo = {
+                id : status,
+                value : todoValue,
+                completed : false
+            };
+            addItemToDom(todo);
+            focusInputTag();
+        });
+    }
+
+    function bindAddTodoViaEnterKey(){
+        input.addEventListener('keydown' , function(event){
+            if ((event.key === 'Enter' || event.key === 'NumpadEnter') && event.target.id === 'item')
+                document.getElementById('add').click();
+        });
+    }
+
+    function bindDeleteAllTodo(){
+        document.getElementById('deleteAll').addEventListener('click' , function(event) {
+            let arr = todoListUl.children;
+            while(arr.length){
+                findFirstChild(arr[0] , 'remove').click();
+            }
+        });
+    }
+
+    function bindUpdateTodoViaEnterKey(){
+        todoListUl.addEventListener('keydown' , function(event){
+            if ((event.key === 'Enter' || event.key === 'NumpadEnter') && event.target.classList.contains('input')){
+                let li = findClosestParent(event.target , 'li');
+                findFirstChild(li , 'update').click();
+            }
+        });
     }
 
     function createButtonsForLi(tag , classList , flagForDisplay , buttonName){
@@ -196,20 +196,79 @@ const view = (function(){
         return element;
     }
 
-    function displayAllTodo(){
-        let todoList = controller.getTodoList();
-        while(todoListUl.length)
-            todoListUl.removeChild(todoListUl.firstChild);
+    function displayAllTodo(handler){
+        todoList = handler();
         if (!todoList.length)
             return;
+        let fragment = new DocumentFragment();
         todoList.forEach((todo) => {
-            addItemToDom(todo);
-            //todoListUl.append(li);
+            fragment.append(addItemToDom(todo));
         });
+        todoListUl.append(fragment);
+    }
+
+    function bindToggleCheckedValue(handler){
+        todoListUl.addEventListener('change' , function(event){
+            if (event.target.classList.contains('checkbox')){
+                let li = findClosestParent(event.target , 'li');
+                const input = findFirstChild(li , 'input');
+                if (input.style.textDecoration === 'none')
+                    input.style.textDecoration = 'line-through';
+                else
+                    input.style.textDecoration = 'none';
+                event.target.style.checked = !event.target.style.checked;
+                handler(findClosestParent(event.target , 'li').id);
+            }
+        });
+    }
+
+    function bindDeleteMarkedAllTodo(){
+        document.getElementById('deleteMarkedAll').addEventListener('click' , function(event){
+            const arr = todoListUl.children;
+            let i = 0;
+            while(i < arr.length){
+                if (findFirstChild(arr[i] , 'input').style.textDecoration === 'line-through'){
+                    findFirstChild(arr[i] , 'remove').click();
+                }
+                else
+                    i += 1;
+            }
+        });
+    }
+
+    function bindMarkAllTodo(){
+        document.getElementById('markAll').addEventListener('click' , function(event){
+            const arr = todoListUl.children;
+            let i = 0;
+            while(i < arr.length){
+                if (findFirstChild(arr[i] , 'input').style.textDecoration === 'none'){
+                    findFirstChild(arr[i] , 'checkbox').click();
+                }
+                i += 1;
+            }
+        });
+    }
+
+    function bindUnmarkAllTodo(){
+        document.getElementById('unmarkAll').addEventListener('click' , function(event){
+            const arr = todoListUl.children;
+            let i = 0;
+            while(i < arr.length){
+                if (findFirstChild(arr[i] , 'input').style.textDecoration === 'line-through'){
+                    findFirstChild(arr[i] , 'checkbox').click();
+                }
+                i += 1;
+            }
+        });
+
     }
 
     function focusInputTag(){
         input.focus();
+    }
+
+    function setDate(){
+        document.getElementById('date').innerText = (new Date()).toDateString();
     }
 
     function addItemToDom(todo){
@@ -222,32 +281,28 @@ const view = (function(){
         input.style.padding = '3px';
         input.style.borderWidth = '0px';
         input.style.outline = 'none';
-        input.addEventListener('keydown' , controller.updateViaEnter);
+        input.style.textDecoration = 'none';
+        let checkbox = createElement('input' , ['checkbox']);
+        checkbox.style.marginRight = '5px';
+        checkbox.type = 'checkbox';
+        checkbox.checked = todo.completed;
+        if (todo.completed)
+            input.style.textDecoration = 'line-through';
         let remove = createButtonsForLi('button' , [] ,  true , 'remove');
-        remove.addEventListener('click' , controller.removeItem);
         let edit = createButtonsForLi('button' , [] , true , 'edit');
-        edit.addEventListener('click' , controller.editItem);
         let cancel = createButtonsForLi('button' , [] , false , 'cancel');
-        cancel.addEventListener('click' , controller.cancelListener);
         let update = createButtonsForLi('button' , [] , false , 'update');
-        update.addEventListener('click' , controller.updateItem);
         let divForButtons = createElement('div' , ['buttons']);
         divForButtons.append(edit);
         divForButtons.append(update);
         divForButtons.append(cancel);
         divForButtons.append(remove);
+        li.append(checkbox);
         li.append(input);
         li.append(divForButtons);
-        todoListUl.append(li);
+        //todoListUl.insertBefore(li , todoListUl.children[0]);
         resetTodoText();
-    }
-
-    function getId(that){
-        return that.id;
-    }
-
-    function getValue(that){
-        return findFirstChild(that , 'input').value;
+        return li;
     }
 
     function cancelChange(that){
@@ -274,10 +329,6 @@ const view = (function(){
         element.readOnly = !element.readOnly;
         if (!element.readOnly)
             element.focus();
-    }
-
-    function setValue(that , todoValue){
-        that.value = todoValue;
     }
 
     function findClosestParent(that , className){
@@ -312,20 +363,89 @@ const view = (function(){
 
     return{
         displayAllTodo,
-        setValue,
-        getValue,
-        getId,
-        findFirstChild,
-        findClosestParent,
-        cancelChange,
-        setToDefaultView,
-        updateInputProperty,
-        getTodoText,
-        addItemToDom,
+        bindDeleteTodo,
+        bindEditTodo,
+        bindCancel,
+        bindUpdateTodo,
+        bindAddTodo,
+        bindAddTodoViaEnterKey,
+        bindDeleteAllTodo,
+        bindUpdateTodoViaEnterKey,
+        bindToggleCheckedValue,
+        bindMarkAllTodo,
+        bindUnmarkAllTodo,
+        bindDeleteMarkedAllTodo,
         focusInputTag,
-        resetTodoText,
-        getTodoUlList
+        setDate
     };
 }());
 
-view.displayAllTodo();
+const controller = (function(){
+
+    window.onLoad = function() {
+        view.focusInputTag();
+        view.setDate();
+     }();
+    view.bindDeleteTodo(handleDeleteTodo);
+    view.bindEditTodo();
+    view.bindCancel(handleCancel);
+    view.bindUpdateTodo(handleUpdateTodo);
+    view.bindAddTodo(handleAddTodo);
+    view.bindAddTodoViaEnterKey();
+    view.bindDeleteAllTodo();
+    view.bindUpdateTodoViaEnterKey();
+    view.displayAllTodo(model.getTodoList);
+    view.bindToggleCheckedValue(handleToggleCheckedValue);
+    view.bindMarkAllTodo();
+    view.bindUnmarkAllTodo();
+    view.bindDeleteMarkedAllTodo();
+
+    function handleDeleteTodo(id){
+        model.deleteTodoItem(id);
+    }
+
+    function handleCancel(id){
+        return model.getValueOfCurrentTodo(id);
+    }
+
+    function deleteAll(){
+        let arr = view.getTodoUlList().children;
+        while(arr.length){
+            view.findFirstChild(arr[0] , 'remove').click();
+        }
+    }
+
+    function handleUpdateTodo(id , value){
+        if (model.checkIfPresent(value)){
+            alert(`To do with value = ${value} already exists.`);
+            return -1;
+        }
+        model.updateTodoItem(id , value);
+        return 0;
+    }
+
+    function handleAddTodo(todoValue){
+        return model.addTodoItem(todoValue);
+    }
+
+    function handleDeleteAllTodo(id){
+        model.deleteTodoItem(id);
+    }
+
+    function handleToggleCheckedValue(id){
+        model.toggleCompleted(id);
+    }
+
+    function addViaEnterKey(e){
+        if (e.key === 'Enter' || e.key === 'NumpadEnter'){
+            view.bindAddTodo(handleAddTodo);
+        }
+    }
+
+    function updateViaEnter(e){
+        if (e.key === 'Enter' || e.key === 'NumpadEnter')
+           view.findFirstChild(e.target.parentNode , 'update').click();
+    }
+
+}());
+
